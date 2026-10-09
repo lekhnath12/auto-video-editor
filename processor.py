@@ -74,7 +74,7 @@ def detect_silence(audio_path: str, min_silence_len: int = 2000, silence_thresh:
     
     return silence_intervals_sec
 
-def detect_filler_words(audio_path: str, model_size: str = "large-v3-turbo", filler_words_list: List[str] = None) -> List[Tuple[float, float]]:
+def detect_filler_words(audio_path: str, model_size: str = "small", filler_words_list: List[str] = None) -> List[Tuple[float, float]]:
     """
     Detects filler words using Whisper.
     Returns:
@@ -82,7 +82,7 @@ def detect_filler_words(audio_path: str, model_size: str = "large-v3-turbo", fil
     """
     return detect_filler_words_whisper(audio_path, model_size, filler_words_list)
 
-def detect_filler_words_whisper(audio_path: str, model_size: str = "large-v3-turbo", filler_words_list: List[str] = None) -> List[Tuple[float, float]]:
+def detect_filler_words_whisper(audio_path: str, model_size: str = "small", filler_words_list: List[str] = None) -> List[Tuple[float, float]]:
     """
     Detects filler words using standard Whisper.
     Returns:
@@ -851,6 +851,39 @@ def process_video(input_path: str, output_path: str, min_silence_len: int = 2000
             os.remove(working_video_path)
         
         logging.info("Done.")
+
 if __name__ == "__main__":
-    # For testing
-    pass
+    input_test_file = r"C:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 22.50.40 Lekh Poudel's Zoom Meeting\video1986872404.mp4"
+    output_test_file = input_test_file.replace(".mp4", "_edited.mp4")
+    
+    if os.path.exists(input_test_file):
+        print(f"▶️ Running standalone processing on: {input_test_file}")
+        
+        process_video(
+            input_path=input_test_file,
+            output_path=output_test_file,
+            min_silence_len=900,
+            silence_thresh=-64,
+            remove_silence=True,
+            crossfade_duration=0.2,
+            bitrate="1500k",
+            preset="medium",
+            use_crf=False,
+            crf=18,
+            filler_words=["um", "uh", "umm", "uhh", "er", "like", "just, you know", "like, you know", "लाइग", "अनि", "मतलब", "हैत", "अ"],
+            freeze_duration=5.0,
+            remove_background=False,
+            bg_color="green",
+            bg_image=None,
+            rvm_model="mobilenetv3",
+            rvm_erode=0,
+            rvm_dilate=0,
+            rvm_median=0,
+            rvm_blur=0,
+            use_segmentation=False,
+            seg_model="general",
+            seg_threshold=0.5,
+            seg_smooth=5
+        )
+    else:
+        print(f"ℹ️ Test video path not found.")
