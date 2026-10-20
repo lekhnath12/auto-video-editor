@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoom Video & Transcript Editor</title>
+    <!-- Tailwind CSS for modern UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .word-token {
+            display: inline-block;
+            padding: 2px 4px;
+            margin: 1px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .word-token:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+        .word-token.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .word-token.selected {
+            background-color: #1d4ed8;
+            color: #ffffff;
+            outline: 2px solid #60a5fa;
+        }
+        .word-token.deleted {
+            text-decoration: line-through;
+            background-color: #7f1d1d;
+            color: #fca5a5;
+            opacity: 0.7;
+        }
+        .word-token.deleted.selected {
+            background-color: #991b1b;
+            outline: 2px solid #ef4444;
+        }
+        .word-token.search-match {
+            background-color: #854d0e;
+            color: #fef08a;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col overflow-hidden font-sans">
+
+    <!-- TOP FOLDER & FILE HEADER BAR -->
+    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-md z-20">
+        <div class="flex items-center space-x-3 flex-1 min-w-[300px]">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <div class="flex-1">
+                <label class="block text-xs text-slate-400 font-medium">Zoom Folder Path</label>
+                <input type="text" id="folderPathInput" 
+                    value="C:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 21.20.58 Interview With Dr. Khadka" 
+                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <!-- Folder Picker Button -->
+            <label class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-2 rounded cursor-pointer shadow flex items-center space-x-2 transition">
+                <i class="fa-solid fa-folder-tree"></i>
+                <span>Open Zoom Folder</span>
+                <input type="file" id="folderPicker" webkitdirectory directory multiple class="hidden">
+            </label>
+
+            <!-- Individual File Selector -->
+            <label class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded cursor-pointer shadow flex items-center space-x-2 transition">
+                <i class="fa-solid fa-file-arrow-up"></i>
+                <span>Choose Files</span>
+                <input type="file" id="filePicker" accept="video/*,audio/*,.json" multiple class="hidden">
+            </label>
+
+            <button id="loadDemoBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded shadow transition flex items-center space-x-2">
+                <i class="fa-solid fa-bolt"></i>
+                <span>Load Demo Data</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- STATUS SUBBAR -->
+    <div class="bg-slate-800/60 border-b border-slate-700/60 px-4 py-1.5 flex items-center justify-between text-xs text-slate-400">
+        <div id="statusMessage" class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Ready. Load a Zoom folder or select files to begin.</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span id="fileStats">No media loaded</span>
+            <button id="viewJsonBtn" class="hover:text-indigo-400 underline cursor-pointer hidden">🔍 View Loaded JSON Structure</button>
+        </div>
+    </div>
+
+    <!-- JSON STRUCT WARNING BANNER -->
+    <div id="jsonFallbackBanner" class="bg-amber-950/80 border-b border-amber-700/60 px-4 py-2 flex items-center justify-between text-xs text-amber-200 hidden">
+        <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+            <span>JSON loaded, but standard timestamp keys were not recognized automatically.</span>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span>Select word text key:</span>
+            <select id="jsonKeySelect" class="bg-slate-900 border border-amber-600 rounded px-2 py-0.5 text-xs text-amber-200 focus:outline-none">
+                <option value="">-- Choose Key --</option>
+            </select>
+            <button id="applyKeyBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-2.5 py-0.5 rounded transition">Apply</button>
+        </div>
+    </div>
+
+    <!-- MAIN WORKSPACE (SPLIT VIEW) -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- LEFT SIDE: TRANSCRIPT BOX -->
+        <div class="w-1/2 flex flex-col border-r border-slate-700 bg-slate-900/90">
+            <!-- Transcript Header & Search -->
+            <div class="p-3 border-b border-slate-700 bg-slate-800/40 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-align-left text-indigo-400"></i>
+                        <span>Full Transcript Editor</span>
+                    </h2>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-xs text-slate-400 flex items-center space-x-1 cursor-pointer">
+                            <input type="checkbox" id="showDeletedToggle" checked class="rounded bg-slate-800 border-slate-600 text-indigo-600 focus:ring-0">
+                            <span>Show deleted words</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Search & Batch Delete/Undelete Toolbar -->
+                <div class="flex items-center space-x-2">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" placeholder="Search transcript (e.g., um, and, word)..." 
+                            class="w-full bg-slate-900 border border-slate-700 rounded pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <span id="searchCountBadge" class="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded hidden">0 found</span>
+                    <button id="selectAllSearchBtn" class="bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 px-2.5 py-1.5 rounded transition hidden" title="Select all matching search results">
+                        Select All
+                    </button>
+                    <button id="deleteAllSearchBtn" class="bg-rose-600/80 hover:bg-rose-600 text-xs text-white px-2.5 py-1.5 rounded transition hidden shadow" title="Mark all found search results for deletion">
+                        🗑️ Delete All Found
+                    </button>
+                    <button id="undeleteAllSearchBtn" class="bg-emerald-600/80 hover:bg-emerald-600 text-xs text-white px-2.5 py-1.5 rounded transition hidden shadow" title="Restore all found search results">
+                        ↩️ Undelete All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transcript Content Container -->
+            <div id="transcriptContainer" class="flex-1 p-4 overflow-y-auto leading-relaxed text-slate-200 select-none text-sm font-normal">
+                <div class="text-center text-slate-500 py-16">
+                    <i class="fa-solid fa-file-lines text-4xl mb-3 block"></i>
+                    <p>No transcript loaded yet.</p>
+                    <p class="text-xs mt-1">Select your Zoom folder or load demo data to view transcript words.</p>
+                </div>
+            </div>
+
+            <!-- Selection Floating Action Bar -->
+            <div id="selectionToolbar" class="bg-indigo-950/90 border-t border-indigo-800 px-4 py-2.5 flex items-center justify-between text-xs hidden">
+                <span id="selectionInfo" class="font-medium text-indigo-200">0 words selected</span>
+                <div class="flex items-center space-x-2">
+                    <button id="playSelectionBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded shadow transition flex items-center space-x-1">
+                        <i class="fa-solid fa-play text-[10px]"></i>
+                        <span>Play Selection</span>
+                    </button>
+                    <button id="deleteSelectionBtn" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded shadow transition flex items-center space-x-1">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                        <span>Mark for Deletion</span>
+                    </button>
+                    <button id="undeleteSelectionBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded shadow transition flex items-center space-x-1 hidden">
+                        <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                        <span>Restore / Undelete</span>
+                    </button>
+                    <button id="clearSelectionBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1 rounded">
+                        Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE: VIDEO PLAYER & DELETED WORDS LOG -->
+        <div class="w-1/2 flex flex-col bg-slate-950">
+            <!-- Video Player Container -->
+            <div class="relative bg-black aspect-video flex items-center justify-center border-b border-slate-800">
+                <video id="videoPlayer" class="w-full h-full object-contain" controls>
+                    Your browser does not support the video tag.
+                </video>
+                <!-- Active Subtitle Overlay Badge -->
+                <div id="activeSubtitle" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-1.5 rounded-lg text-sm font-medium tracking-wide shadow-lg border border-slate-700 hidden text-center max-w-[85%]">
+                    -
+                </div>
+            </div>
+
+            <!-- Video Player Controls / Info -->
+            <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                <div class="flex items-center space-x-3">
+                    <span id="currentTimeDisplay">00:00</span>
+                    <span>/</span>
+                    <span id="durationDisplay">00:00</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-slate-400">Playback Speed:</span>
+                    <select id="playbackRate" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none">
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1.0x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2.0x</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- DELETED WORDS LOG DRAWER -->
+            <div class="flex-1 flex flex-col bg-slate-900/70 overflow-hidden">
+                <div class="px-4 py-2.5 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-trash-can text-rose-400"></i>
+                        <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Deleted Words Log</h3>
+                        <span id="deletedCountBadge" class="bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full text-[10px] font-semibold">0 items</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="exportJsonBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded shadow transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-download"></i>
+                            <span>Export deleted_words.json</span>
+                        </button>
+                        <label class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded shadow cursor-pointer transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-upload"></i>
+                            <span>Import JSON</span>
+                            <input type="file" id="importJsonInput" accept=".json" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Deleted Log Table -->
+                <div class="flex-1 overflow-y-auto p-3">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[11px] text-slate-400 border-b border-slate-700/50">
+                                <th class="pb-2 font-medium">Word / Phrase</th>
+                                <th class="pb-2 font-medium">Start Time</th>
+                                <th class="pb-2 font-medium">End Time</th>
+                                <th class="pb-2 font-medium text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deletedLogTableBody" class="text-xs divide-y divide-slate-800">
+                            <tr>
+                                <td colspan="4" class="text-center text-slate-500 py-6">No words marked for deletion yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Structure Modal -->
+    <div id="jsonModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                    <i class="fa-solid fa-code text-indigo-400"></i>
+                    <span>Loaded JSON Structure Inspector</span>
+                </h3>
+                <button id="closeModalBtn" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-4 flex-1 overflow-y-auto">
+                <pre id="jsonModalContent" class="text-xs font-mono text-emerald-400 bg-slate-950 p-4 rounded-lg overflow-x-auto"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPLICATION LOGIC -->
+    <script>
+        // State Management
+        let transcriptWords = []; 
+        let rawJsonData = null;
+        let selectedWordIds = new Set();
+        let lastClickedIndex = null;
+        let activeSearchQuery = '';
+
+        const videoPlayer = document.getElementById('videoPlayer');
+        const transcriptContainer = document.getElementById('transcriptContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        const fileStats = document.getElementById('fileStats');
+        const selectionToolbar = document.getElementById('selectionToolbar');
+        const selectionInfo = document.getElementById('selectionInfo');
+        const deletedLogTableBody = document.getElementById('deletedLogTableBody');
+        const deletedCountBadge = document.getElementById('deletedCountBadge');
+        const searchInput = document.getElementById('searchInput');
+        const searchCountBadge = document.getElementById('searchCountBadge');
+        const selectAllSearchBtn = document.getElementById('selectAllSearchBtn');
+        const deleteAllSearchBtn = document.getElementById('deleteAllSearchBtn');
+        const undeleteAllSearchBtn = document.getElementById('undeleteAllSearchBtn');
+        const showDeletedToggle = document.getElementById('showDeletedToggle');
+        const activeSubtitle = document.getElementById('activeSubtitle');
+        const currentTimeDisplay = document.getElementById('currentTimeDisplay');
+        const durationDisplay = document.getElementById('durationDisplay');
+        const jsonFallbackBanner = document.getElementById('jsonFallbackBanner');
+        const jsonKeySelect = document.getElementById('jsonKeySelect');
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "00:00";
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Load Demo Data
+        document.getElementById('loadDemoBtn').addEventListener('click', () => {
+            jsonFallbackBanner.classList.add('hidden');
+            const demoWords = [
+                { word: "Hello", start: 0.0, end: 0.5 },
+                { word: "everyone,", start: 0.5, end: 1.0 },
+                { word: "welcome", start: 1.1, end: 1.5 },
+                { word: "to", start: 1.5, end: 1.7 },
+                { word: "this", start: 1.7, end: 1.9 },
+                { word: "interview", start: 2.0, end: 2.5 },
+                { word: "with", start: 2.5, end: 2.7 },
+                { word: "Dr.", start: 2.8, end: 3.1 },
+                { word: "Khadka.", start: 3.2, end: 3.7 },
+                { word: "Today", start: 4.2, end: 4.5 },
+                { word: "we", start: 4.5, end: 4.6 },
+                { word: "will", start: 4.6, end: 4.8 },
+                { word: "be", start: 4.8, end: 5.0 },
+                { word: "discussing", start: 5.1, end: 5.6 },
+                { word: "solar", start: 5.7, end: 6.0 },
+                { word: "materials", start: 6.1, end: 6.6 },
+                { word: "um,", start: 6.7, end: 7.0 },
+                { word: "and", start: 7.1, end: 7.3 },
+                { word: "renewable", start: 7.4, end: 7.9 },
+                { word: "energy", start: 8.0, end: 8.5 },
+                { word: "technologies.", start: 8.6, end: 9.3 }
+            ];
+
+            loadTranscriptData(demoWords);
+            statusMessage.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Loaded Demo Data successfully.</span>`;
+            fileStats.textContent = `Demo Data: ${demoWords.length} words`;
+            document.getElementById('viewJsonBtn').classList.remove('hidden');
+            rawJsonData = demoWords;
+        });
+
+        // Folder & File Picker Handlers
+        document.getElementById('folderPicker').addEventListener('change', handleFileSelection);
+        document.getElementById('filePicker').addEventListener('change', handleFileSelection);
+
+        function handleFileSelection(e) {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            let videoFile = null;
+            let jsonFile = null;
+
+            files.forEach(file => {
+                const name = file.name.toLowerCase();
+                if (name.endsWith('.mp4') || name.endsWith('.m4a') || name.endsWith('.mov') || name.endsWith('.webm')) {
+                    videoFile = file;
+                } else if (name.endsWith('.json') && !name.includes('deleted_words')) {
+                    jsonFile = file;
+                }
+            });
+
+            if (videoFile) {
+                const videoUrl = URL.createObjectURL(videoFile);
+                videoPlayer.src = videoUrl;
+            }
+
+            if (jsonFile) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        rawJsonData = parsed;
+                        document.getElementById('viewJsonBtn').classList.remove('hidden');
+                        parseTranscriptStructure(parsed);
+                        statusMessage.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Loaded ${jsonFile.name} successfully.</span>`;
+                        fileStats.textContent = `Files: ${videoFile ? videoFile.name : 'No video'} | ${jsonFile.name}`;
+                    } catch (err) {
+                        alert("Error parsing JSON transcript: " + err.message);
+                    }
+                };
+                reader.readAsText(jsonFile);
+            } else {
+                statusMessage.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span><span>Video loaded, but no transcript JSON found in selection.</span>`;
+            }
+        }
+
+        // Deep Recursive JSON Scanner to find any list or text fields
+        function parseTranscriptStructure(data, manualKey = null) {
+            jsonFallbackBanner.classList.add('hidden');
+            let extractedWords = [];
+            let wordCounter = 0;
+
+            function recursiveScan(obj) {
+                if (!obj) return;
+
+                if (Array.isArray(obj)) {
+                    obj.forEach(item => recursiveScan(item));
+                } else if (typeof obj === 'object') {
+                    const textVal = manualKey ? obj[manualKey] : (obj.word || obj.text || obj.token || obj.content || obj.label || obj.transcript || obj.value);
+                    
+                    if (typeof textVal === 'string' && textVal.trim().length > 0) {
+                        const start = parseTimestamp(obj.start || obj.start_time || obj.begin || obj.time || obj.timestamp);
+                        const end = parseTimestamp(obj.end || obj.end_time || obj.finish);
+
+                        const wordsInText = textVal.trim().split(/\s+/);
+                        if (wordsInText.length > 1) {
+                            const baseStart = start !== null ? start : wordCounter * 0.4;
+                            const baseEnd = end !== null ? end : baseStart + (wordsInText.length * 0.4);
+                            const duration = Math.max(baseEnd - baseStart, 0.5);
+                            const step = duration / wordsInText.length;
+
+                            wordsInText.forEach((wStr, idx) => {
+                                extractedWords.push({
+                                    id: wordCounter++,
+                                    text: wStr,
+                                    start: baseStart + (idx * step),
+                                    end: baseStart + ((idx + 1) * step),
+                                    deleted: false
+                                });
+                            });
+                        } else {
+                            const wStart = start !== null ? start : wordCounter * 0.4;
+                            const wEnd = end !== null ? end : wStart + 0.4;
+                            extractedWords.push({
+                                id: wordCounter++,
+                                text: textVal.trim(),
+                                start: wStart,
+                                end: wEnd,
+                                deleted: false
+                            });
+                        }
+                    } else {
+                        for (let key in obj) {
+                            if (typeof obj[key] === 'object') {
+                                recursiveScan(obj[key]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            recursiveScan(data);
+
+            if (extractedWords.length === 0) {
+                populateKeyDropdown(data);
+                jsonFallbackBanner.classList.remove('hidden');
+                statusMessage.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span><span>Could not auto-detect text keys. Please choose a key above.</span>`;
+            } else {
+                loadTranscriptData(extractedWords);
+            }
+        }
+
+        function parseTimestamp(val) {
+            if (val === undefined || val === null) return null;
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') {
+                if (val.includes(':')) {
+                    const parts = val.split(':').map(parseFloat);
+                    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                    if (parts.length === 2) return parts[0] * 60 + parts[1];
+                }
+                const parsed = parseFloat(val);
+                return isNaN(parsed) ? null : parsed;
+            }
+            return null;
+        }
+
+        function populateKeyDropdown(data) {
+            jsonKeySelect.innerHTML = '<option value="">-- Choose Key --</option>';
+            const keys = new Set();
+            
+            function collectKeys(obj) {
+                if (!obj) return;
+                if (Array.isArray(obj)) {
+                    obj.forEach(item => collectKeys(item));
+                } else if (typeof obj === 'object') {
+                    for (let k in obj) {
+                        if (typeof obj[k] === 'string') keys.add(k);
+                        else if (typeof obj[k] === 'object') collectKeys(obj[k]);
+                    }
+                }
+            }
+            collectKeys(data);
+            keys.forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = k;
+                jsonKeySelect.appendChild(opt);
+            });
+        }
+
+        document.getElementById('applyKeyBtn').addEventListener('click', () => {
+            const key = jsonKeySelect.value;
+            if (key && rawJsonData) {
+                parseTranscriptStructure(rawJsonData, key);
+            }
+        });
+
+        function loadTranscriptData(wordsArray) {
+            transcriptWords = wordsArray;
+            selectedWordIds.clear();
+            renderTranscript();
+            updateDeletedLog();
+        }
+
+        // Render Transcript to DOM
+        function renderTranscript() {
+            transcriptContainer.innerHTML = '';
+            const showDeleted = showDeletedToggle.checked;
+
+            if (transcriptWords.length === 0) {
+                transcriptContainer.innerHTML = `<div class="text-center text-slate-500 py-16">No transcript words available.</div>`;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            transcriptWords.forEach((item, index) => {
+                if (item.deleted && !showDeleted) return;
+
+                const span = document.createElement('span');
+                span.className = 'word-token';
+                span.textContent = item.text + ' ';
+                span.dataset.id = item.id;
+                span.dataset.index = index;
+
+                if (item.deleted) span.classList.add('deleted');
+                if (selectedWordIds.has(item.id)) span.classList.add('selected');
+
+                if (activeSearchQuery && item.text.toLowerCase().includes(activeSearchQuery)) {
+                    span.classList.add('search-match');
+                }
+
+                span.addEventListener('click', (e) => {
+                    const idx = parseInt(span.dataset.index);
+                    if (e.shiftKey && lastClickedIndex !== null) {
+                        const startIdx = Math.min(lastClickedIndex, idx);
+                        const endIdx = Math.max(lastClickedIndex, idx);
+                        for (let i = startIdx; i <= endIdx; i++) {
+                            selectedWordIds.add(transcriptWords[i].id);
+                        }
+                    } else if (e.ctrlKey || e.metaKey) {
+                        if (selectedWordIds.has(item.id)) {
+                            selectedWordIds.delete(item.id);
+                        } else {
+                            selectedWordIds.add(item.id);
+                        }
+                    } else {
+                        if (selectedWordIds.has(item.id) && selectedWordIds.size === 1) {
+                            videoPlayer.currentTime = item.start;
+                            videoPlayer.play();
+                        } else {
+                            selectedWordIds.clear();
+                            selectedWordIds.add(item.id);
+                        }
+                    }
+                    lastClickedIndex = idx;
+                    renderTranscript();
+                    updateSelectionToolbar();
+                });
+
+                fragment.appendChild(span);
+            });
+
+            transcriptContainer.appendChild(fragment);
+        }
+
+        function updateSelectionToolbar() {
+            if (selectedWordIds.size > 0) {
+                selectionToolbar.classList.remove('hidden');
+                selectionInfo.textContent = `${selectedWordIds.size} word(s) selected`;
+
+                let hasActive = false;
+                let hasDeleted = false;
+                selectedWordIds.forEach(id => {
+                    const w = transcriptWords.find(item => item.id === id);
+                    if (w) {
+                        if (w.deleted) hasDeleted = true;
+                        else hasActive = true;
+                    }
+                });
+
+                const deleteBtn = document.getElementById('deleteSelectionBtn');
+                const undeleteBtn = document.getElementById('undeleteSelectionBtn');
+                if (hasActive && !hasDeleted) {
+                    deleteBtn.classList.remove('hidden');
+                    undeleteBtn.classList.add('hidden');
+                } else if (hasDeleted && !hasActive) {
+                    deleteBtn.classList.add('hidden');
+                    undeleteBtn.classList.remove('hidden');
+                } else {
+                    deleteBtn.classList.remove('hidden');
+                    undeleteBtn.classList.remove('hidden');
+                }
+            } else {
+                selectionToolbar.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('deleteSelectionBtn').addEventListener('click', () => {
+            selectedWordIds.forEach(id => {
+                const w = transcriptWords.find(item => item.id === id);
+                if (w) w.deleted = true;
+            });
+            selectedWordIds.clear();
+            renderTranscript();
+            updateDeletedLog();
+            updateSelectionToolbar();
+        });
+
+        document.getElementById('undeleteSelectionBtn').addEventListener('click', () => {
+            selectedWordIds.forEach(id => {
+                const w = transcriptWords.find(item => item.id === id);
+                if (w) w.deleted = false;
+            });
+            selectedWordIds.clear();
+            renderTranscript();
+            updateDeletedLog();
+            updateSelectionToolbar();
+        });
+
+        document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+            selectedWordIds.clear();
+            renderTranscript();
+            updateSelectionToolbar();
+        });
+
+        document.getElementById('playSelectionBtn').addEventListener('click', () => {
+            let minStart = Infinity;
+            selectedWordIds.forEach(id => {
+                const w = transcriptWords.find(item => item.id === id);
+                if (w && w.start < minStart) minStart = w.start;
+            });
+            if (minStart !== Infinity) {
+                videoPlayer.currentTime = minStart;
+                videoPlayer.play();
+            }
+        });
+
+        // Search Transcript & Batch Actions
+        searchInput.addEventListener('input', (e) => {
+            activeSearchQuery = e.target.value.trim().toLowerCase();
+            if (activeSearchQuery.length > 0) {
+                const matches = transcriptWords.filter(w => w.text.toLowerCase().includes(activeSearchQuery));
+                searchCountBadge.textContent = `${matches.length} found`;
+                searchCountBadge.classList.remove('hidden');
+                selectAllSearchBtn.classList.remove('hidden');
+                deleteAllSearchBtn.classList.remove('hidden');
+                undeleteAllSearchBtn.classList.remove('hidden');
+            } else {
+                searchCountBadge.classList.add('hidden');
+                selectAllSearchBtn.classList.add('hidden');
+                deleteAllSearchBtn.classList.add('hidden');
+                undeleteAllSearchBtn.classList.add('hidden');
+            }
+            renderTranscript();
+        });
+
+        selectAllSearchBtn.addEventListener('click', () => {
+            if (!activeSearchQuery) return;
+            selectedWordIds.clear();
+            transcriptWords.forEach(w => {
+                if (w.text.toLowerCase().includes(activeSearchQuery)) {
+                    selectedWordIds.add(w.id);
+                }
+            });
+            renderTranscript();
+            updateSelectionToolbar();
+        });
+
+        // Batch Delete All Found
+        deleteAllSearchBtn.addEventListener('click', () => {
+            if (!activeSearchQuery) return;
+            transcriptWords.forEach(w => {
+                if (w.text.toLowerCase().includes(activeSearchQuery)) {
+                    w.deleted = true;
+                }
+            });
+            selectedWordIds.clear();
+            renderTranscript();
+            updateDeletedLog();
+            updateSelectionToolbar();
+        });
+
+        // Batch Undelete All Found
+        undeleteAllSearchBtn.addEventListener('click', () => {
+            if (!activeSearchQuery) return;
+            transcriptWords.forEach(w => {
+                if (w.text.toLowerCase().includes(activeSearchQuery)) {
+                    w.deleted = false;
+                }
+            });
+            selectedWordIds.clear();
+            renderTranscript();
+            updateDeletedLog();
+            updateSelectionToolbar();
+        });
+
+        showDeletedToggle.addEventListener('change', () => {
+            renderTranscript();
+        });
+
+        function updateDeletedLog() {
+            const deletedWords = transcriptWords.filter(w => w.deleted);
+            deletedCountBadge.textContent = `${deletedWords.length} items`;
+
+            if (deletedWords.length === 0) {
+                deletedLogTableBody.innerHTML = `<tr><td colspan="4" class="text-center text-slate-500 py-6">No words marked for deletion yet.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            deletedWords.forEach(w => {
+                html += `
+                    <tr class="hover:bg-slate-800/50 border-b border-slate-800">
+                        <td class="py-2 font-medium text-rose-300">${w.text}</td>
+                        <td class="py-2 text-slate-400">${w.start.toFixed(2)}s</td>
+                        <td class="py-2 text-slate-400">${w.end.toFixed(2)}s</td>
+                        <td class="py-2 text-right">
+                            <button onclick="restoreWord(${w.id})" class="bg-emerald-600/80 hover:bg-emerald-600 text-white px-2.5 py-1 rounded text-[11px] transition">
+                                Restore
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            deletedLogTableBody.innerHTML = html;
+        }
+
+        window.restoreWord = function(id) {
+            const w = transcriptWords.find(item => item.id === id);
+            if (w) w.deleted = false;
+            renderTranscript();
+            updateDeletedLog();
+        };
+
+        // Export deleted_words.json containing all tracked deleted tokens
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const deletedWords = transcriptWords.filter(w => w.deleted);
+            const exportArray = deletedWords.map(w => ({
+                word: w.text,
+                start_time: Number(w.start.toFixed(3)),
+                end_time: Number(w.end.toFixed(3))
+            }));
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportArray, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "deleted_words.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+
+        // Import deleted_words.json
+        document.getElementById('importJsonInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (Array.isArray(imported)) {
+                        imported.forEach(item => {
+                            transcriptWords.forEach(w => {
+                                if (w.text === item.word && Math.abs(w.start - item.start_time) < 0.1) {
+                                    w.deleted = true;
+                                }
+                            });
+                        });
+                    } else {
+                        // Key-value object format fallback
+                        transcriptWords.forEach(w => {
+                            if (imported[w.text]) {
+                                w.deleted = true;
+                            }
+                        });
+                    }
+                    renderTranscript();
+                    updateDeletedLog();
+                    alert("deleted_words.json imported successfully!");
+                } catch (err) {
+                    alert("Error reading deleted_words.json: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        videoPlayer.addEventListener('timeupdate', () => {
+            const currentTime = videoPlayer.currentTime;
+            currentTimeDisplay.textContent = formatTime(currentTime);
+
+            const activeW = transcriptWords.find(w => !w.deleted && currentTime >= w.start && currentTime <= w.end);
+            
+            document.querySelectorAll('.word-token').forEach(el => {
+                const id = parseInt(el.dataset.id);
+                if (activeW && activeW.id === id) {
+                    el.classList.add('active');
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                    activeSubtitle.textContent = activeW.text;
+                    activeSubtitle.classList.remove('hidden');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            if (!activeW) {
+                activeSubtitle.classList.add('hidden');
+            }
+        });
+
+        videoPlayer.addEventListener('loadedmetadata', () => {
+            durationDisplay.textContent = formatTime(videoPlayer.duration);
+        });
+
+        document.getElementById('playbackRate').addEventListener('change', (e) => {
+            videoPlayer.playbackRate = parseFloat(e.target.value);
+        });
+
+        document.getElementById('viewJsonBtn').addEventListener('click', () => {
+            document.getElementById('jsonModalContent').textContent = JSON.stringify(rawJsonData, null, 2);
+            document.getElementById('jsonModal').classList.remove('hidden');
+        });
+        document.getElementById('closeModalBtn').addEventListener('click', () => {
+            document.getElementById('jsonModal').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
