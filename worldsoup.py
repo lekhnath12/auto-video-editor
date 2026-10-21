@@ -84,7 +84,7 @@ def generate_devanagari_word_soup(transcript_path: str, output_image_path: str =
     plt.show()
 
 if __name__ == "__main__":
-    transcript_file = r"C:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 21.20.58 Interview With Dr. Khadka\video1184682387_temp_audio_transcript.txt"
+    transcript_file = r"c:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 21.47.21 Lekh Poudel's Zoom Meeting\video1103826994_temp_audio_transcript.txt"
     output_image = "dr_khadka_interview_word_soup.png"
     
     generate_devanagari_word_soup(transcript_file, output_image)
