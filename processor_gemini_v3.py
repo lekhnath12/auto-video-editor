@@ -275,7 +275,7 @@ def detect_freeze_frames(video_path: str, min_duration: float = 5.0, noise_toler
             '-f', 'null',
             '-'
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=720000)
         
         freeze_intervals = []
         freeze_start = None
@@ -365,7 +365,7 @@ def extract_segments_ffmpeg(input_path: str, segments: List[Tuple[float, float]]
                 segment_file
             ])
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=720000)
             if result.returncode != 0:
                 logging.error(f"FFmpeg segment extraction failed: {result.stderr}")
                 raise RuntimeError(f"Failed to extract segment {i}")
@@ -408,7 +408,7 @@ def concatenate_segments_ffmpeg(segment_files: List[str], output_path: str, code
                 cmd.extend(ffmpeg_params)
         
         cmd.extend(['-y', output_path])
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=720000)
         
         if result.returncode != 0:
             logging.error(f"FFmpeg concatenation failed: {result.stderr}")
@@ -463,7 +463,7 @@ def transpose_video_if_needed(input_path: str, rotation: int) -> str:
         return input_path
         
     try:
-        subprocess.run(['ffmpeg', '-i', input_path, '-vf', f'transpose={transpose_filter}', '-c:a', 'copy', '-y', temp_path], capture_output=True, check=True, timeout=1800)
+        subprocess.run(['ffmpeg', '-i', input_path, '-vf', f'transpose={transpose_filter}', '-c:a', 'copy', '-y', temp_path], capture_output=True, check=True, timeout=720000)
         return temp_path
     except Exception:
         if os.path.exists(temp_path):
@@ -567,26 +567,30 @@ def process_video(input_path: str, output_path: str, min_silence_len: int = 2000
 
 if __name__ == "__main__":
     input_test_file = r"C:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 21.20.58 Interview With Dr. Khadka\video1184682387.mp4"
-    output_test_file = input_test_file.replace(".mp4", "_edited.mp4")
-    
-    if os.path.exists(input_test_file):
-        print(f"▶️ Running standalone processing on: {input_test_file}")
+    input_test_file = r"C:\Users\lekhp\OneDrive\Documents\Zoom\2026-10-02 21.47.21 Lekh Poudel's Zoom Meeting\video1103826994.mp4"
+
+    import glob 
+    for input_test_file in glob.glob(r"C:\Users\lekhp\OneDrive\Documents\Zoom\*\video*.mp4"):
+        output_test_file = input_test_file.replace(".mp4", "_edited.mp4")
         
-        process_video(
-            input_path=input_test_file,
-            output_path=output_test_file,
-            min_silence_len=900,
-            silence_thresh=-64,
-            remove_silence=True,
-            crossfade_duration=0.2,
-            preset="fast",       # Upgraded speed preset
-            use_gpu_encoding=False, # Will automatically use Nvidia NVENC if available
-            use_crf=False,
-            crf=18,
-            filler_words=["um", "uh", "umm", "uhh", "er", "like", "just, you know", "like", "अं",
-            "आं", "अँ", "आँ", "लाइग", "हँ", "ए", "लाइग", "अनि", "मतलब", "हैत", "अ", "चाहिँ", "चाहिँ", "हैन"],
-            freeze_duration=3.0,
-            remove_background=False
-        )
-    else:
-        print(f"ℹ️ Test video path not found.")
+        if os.path.exists(input_test_file):
+            print(f"▶️ Running standalone processing on: {input_test_file}")
+            
+            process_video(
+                input_path=input_test_file,
+                output_path=output_test_file,
+                min_silence_len=900,
+                silence_thresh=-64,
+                remove_silence=True,
+                crossfade_duration=0.2,
+                preset="fast",       # Upgraded speed preset
+                use_gpu_encoding=False, # Will automatically use Nvidia NVENC if available
+                use_crf=False,
+                crf=18,
+                filler_words=["um", "uh", "umm", "uhh", "er", "like", "just, you know", "like", "अं",
+                "आं", "अँ", "आँ", "लाइग", "हँ", "ए", "लाइग", "अनि", "मतलब", "हैत", "अ", "चाहिँ", "चाहिँ", "हैन"],
+                freeze_duration=5.0,
+                remove_background=False
+            )
+        else:
+            print(f"ℹ️ Test video path not found.")
